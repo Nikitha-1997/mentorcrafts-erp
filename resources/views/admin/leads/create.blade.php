@@ -103,14 +103,6 @@
                             <small class="text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple.</small>
                         </div>
 
-                        {{-- 💰 Service Cost Section --}}
-                        <!--<div id="service-cost-section" class="mt-3" style="display:none;">
-                            <label class="form-label fw-semibold">Service Costs</label>
-                            <div id="service-cost-container"></div>
-                            <div class="text-end mt-2">
-                                <strong>Total Cost: ₹<span id="total-cost">0.00</span></strong>
-                            </div>
-                        </div>-->
                         <div id="service-costs-section"></div>
                         <h6 class="text-end">Total Cost: <span id="total-cost">₹0.00</span></h6>
 

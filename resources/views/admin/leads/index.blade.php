@@ -31,20 +31,6 @@
         <label for="month" class="form-label mb-1">Month</label>
         <input type="month" id="month" name="month" class="form-control">
     </div>
-   <!-- <div class="col-md-2 filter-field">
-        <label for="status" class="form-label mb-1">Status</label>
-        <select id="status" name="status" class="form-select">
-            <option value="">All Status</option>
-            <option value="New">New</option>
-            <option value="Contacted">Contacted</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Qualified">Qualified</option>
-            <option value="Proposal Sent">Proposal Sent</option>
-            <option value="Converted">Converted</option>
-            <option value="Lost">Lost</option>
-            <option value="Closed">Closed</option>
-        </select>
-    </div>-->
 
     <div class="col-md-3 d-flex gap-2 align-items-end">
         <button type="button" id="filterBtn" class="btn btn-primary flex-fill">Filter</button>

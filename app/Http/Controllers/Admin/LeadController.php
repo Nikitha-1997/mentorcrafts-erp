@@ -167,10 +167,10 @@ public function store(Request $request)
         'pincode' => $request->pincode,
     ]);
 
-    // 🔹 Step 3: Attach selected services
+    //Attach selected services
     $lead->services()->sync($request->services);
 
-    // 🔹 Step 4: Handle cost saving
+    //  Handle cost saving
     // The Blade form sends cost_name[service_id][], cost_amount[service_id][], cost_billing_type[service_id][]
     $hasEditedCosts = $request->has('cost_name');
 
@@ -194,7 +194,7 @@ public function store(Request $request)
             }
         }
     } else {
-        // ⚙️ If no manual edits, copy default service costs
+        //  If no manual edits, copy default service costs
         foreach ($lead->services as $service) {
             $serviceCosts = ServiceCost::where('service_id', $service->id)->get();
 
@@ -210,7 +210,7 @@ public function store(Request $request)
         }
     }
 
-    // 🔹 Step 5: Handle follow-up and reminder
+    //  Handle follow-up and reminder
     if ($request->filled('next_followup_date')) {
         Followup::create([
             'lead_id' => $lead->id,
@@ -228,7 +228,7 @@ public function store(Request $request)
         ]);
     }
 
-    // 🔹 Step 6: Redirect
+    //  Redirect
     return redirect()->route('leads.index')->with('success', 'Lead created successfully.');
 }
 
@@ -238,7 +238,10 @@ public function store(Request $request)
      */
     public function show(Lead $lead)
     {
-        $lead->load('services', 'followups.staff');
+        
+       $lead = Lead::with(['serviceCosts.service', 'followups.staff'])->findOrFail($lead->id);
+
+
         return view('admin.leads.show', compact('lead'));
     }
 
@@ -247,6 +250,10 @@ public function store(Request $request)
      */
     public function edit(Lead $lead)
     {
+         if (strtolower($lead->status) === 'converted') {
+        return redirect()->route('leads.show', $lead->id)
+            ->with('error', 'This lead has been converted to a customer and cannot be edited.');
+    }
        $services = Service::where('is_active', true)->get();
          $lead->load('serviceCosts'); // eager load
         return view('admin.leads.edit', compact('lead', 'services'));

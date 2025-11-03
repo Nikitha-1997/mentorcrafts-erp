@@ -68,22 +68,11 @@ Route::middleware(['auth', 'role:Super Admin'])->group(function () {
 
     Route::get('/admin/services/{service}/costs', [ServiceController::class, 'getServiceCosts']);
 
-    // AJAX: fetch costs for a set of services
-/*Route::post('/admin/leads/service-costs', [LeadController::class, 'fetchServiceCosts'])
-    ->name('leads.service-costs');
-   // Route::get('/services/{id}/costs', [ServiceController::class, 'getServiceCosts'])->name('services.costs');
-Route::get('/services/{id}/costs', [ServiceController::class, 'getServiceCosts'])
-    ->name('services.costs');
-
-      Route::resource('leads', LeadController::class);*/
+   
       // routes/web.php
 Route::post('/leads/{lead}/convert', [LeadController::class, 'convertToCustomer'])
     ->name('leads.convert')
     ->middleware(['auth']); // add role middleware if needed
-
-
-    //Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
-    //Route::get('/customers/{id}', [CustomerController::class, 'show'])->name('customers.show');
 
 });
 Route::prefix('')->middleware(['auth','role:Super Admin'])->group(function () {

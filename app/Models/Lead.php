@@ -30,7 +30,8 @@ class Lead extends Model
     ];
     public function services()
     {
-        return $this->belongsToMany(Service::class, 'lead_services');
+          return $this->belongsToMany(Service::class, 'lead_services')->with('costs');
+
     }
     public function followups()
     {
@@ -40,6 +41,7 @@ class Lead extends Model
     public function serviceCosts()
 {
     return $this->hasMany(LeadServiceCost::class);
+    
 }
 public function leadServiceCosts()
 {
@@ -51,7 +53,7 @@ public function leadServiceCosts()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
-    public static function generateLeadCode()
+public static function generateLeadCode()
 {
     $prefix = 'LD';
     $monthYear = now()->format('Ym'); // e.g., 202510

@@ -11,12 +11,21 @@
     </div>
 
     {{-- Flash Messages --}}
-    @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
-    @endif
-    @if(session('info'))
-        <div class="alert alert-info">{{ session('info') }}</div>
-    @endif
+    
+    @if (session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
+@if (session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
 
     <div class="row gx-3">
         {{-- Left Column --}}
@@ -58,19 +67,58 @@
 
             
 
-            <!-- Services -->
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Services</h5>
-                    @if($lead->services->isEmpty())
-                        <p class="text-muted">No services selected.</p>
-                    @else
-                        @foreach($lead->services as $service)
-                            <span class="badge bg-info me-1">{{ $service->name }}</span>
-                        @endforeach
-                    @endif
+            
+<!-- Services & Costs -->
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title mb-3">Services & Costs</h5>
+
+        @php
+            $groupedCosts = $lead->serviceCosts->groupBy(fn($c) => $c->service?->name ?? 'Unknown Service');
+        @endphp
+
+        @if($groupedCosts->isEmpty())
+            <p class="text-muted">No service costs available.</p>
+        @else
+            @foreach($groupedCosts as $serviceName => $costs)
+                <div class="mb-3 border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0 text-primary">{{ $serviceName }}</h6>
+                        <span class="badge bg-light text-dark">
+                            Total: ₹{{ number_format($costs->sum('amount'), 2) }}
+                        </span>
+                    </div>
+
+                    <table class="table table-sm table-bordered mb-2">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Amount</th>
+                                <th>Billing Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($costs as $cost)
+                                <tr>
+                                    <td>{{ $cost->name }}</td>
+                                    <td>₹{{ number_format($cost->amount, 2) }}</td>
+                                    <td>{{ ucfirst(str_replace('_', ' ', $cost->billing_type)) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
+            @endforeach
+
+            <div class="text-end border-top pt-2 fw-semibold">
+                Total Estimated Cost:
+                ₹{{ number_format($lead->serviceCosts->sum('amount'), 2) }}
             </div>
+        @endif
+    </div>
+</div>
+
+
         </div>
 
         {{-- Right Column --}}
@@ -109,25 +157,33 @@
                 </div>
             </div>
 
-            <!-- Follow-up History -->
-            <div class="card">
+        </div>
+        {{-- Follow-up History --}}
+            <div class="card mt-4 border-0 shadow-sm rounded-3">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Follow-up History</h5>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title mb-3">Follow-up History</h5>
                     @if($lead->followups->isEmpty())
-                        <p class="text-muted">No follow-ups yet.</p>
+                        <p class="text-muted">No follow-up records yet.</p>
                     @else
                         <ul class="list-group">
                             @foreach($lead->followups->sortByDesc('created_at') as $f)
                                 <li class="list-group-item">
-                                    <div class="d-flex justify-content-between">
+                                    <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <strong>{{ $f->staff?->name ?? 'System' }}</strong>
                                             <small class="text-muted"> — {{ $f->created_at->format('d M Y, H:i') }}</small>
                                             <p class="mb-1">{{ $f->notes }}</p>
                                             @if($f->next_followup_date)
-                                                <small class="text-info">Next: {{ \Carbon\Carbon::parse($f->next_followup_date)->format('d M Y, H:i') }}</small>
+                                                <small class="text-info">Next Follow-up: {{ $f->next_followup_date->format('d M Y, H:i') }}</small>
                                             @endif
                                         </div>
+                                        <form method="POST" action="{{ route('followups.destroy', $f->id) }}" onsubmit="return confirm('Delete this follow-up?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-sm btn-outline-danger"><i class="ri-delete-bin-line"></i></button>
+                                        </form>
                                     </div>
                                 </li>
                             @endforeach
@@ -135,7 +191,6 @@
                     @endif
                 </div>
             </div>
-        </div>
     </div>
 </div>
 @endsection
