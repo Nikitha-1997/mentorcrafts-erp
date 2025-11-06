@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CustomerServiceCostController;
 
 
 
@@ -61,6 +62,12 @@ Route::middleware(['auth','role:Super Admin'])->group(function(){
     Route::resource('roles', RoleController::class);
     Route::resource('permissions', App\Http\Controllers\Admin\PermissionController::class)->except(['show']);
 });
+// lead from customer
+Route::post('/customers/{customer}/request-service', [CustomerController::class, 'requestNewService'])
+    ->name('customers.request-service')
+    ->middleware(['auth','role:Super Admin']); 
+
+
 Route::middleware(['auth', 'role:Super Admin'])->group(function () {
     Route::get('services/data', [ServiceController::class, 'getData'])->name('services.data');
     Route::resource('services', ServiceController::class);
@@ -82,6 +89,15 @@ Route::prefix('')->middleware(['auth','role:Super Admin'])->group(function () {
     Route::get('/leads/{lead}/service/{service}/costs', [LeadController::class, 'getServiceCosts']);
 
 });
+Route::prefix('')->middleware(['auth', 'role:Super Admin'])->group(function () {
+    Route::get('service-costs', [CustomerServiceCostController::class, 'index'])
+        ->name('service-costs.index');
+
+    Route::post('service-costs/{id}/approve', [CustomerServiceCostController::class, 'approve'])
+        ->name('service-costs.approve');
+});
+
+
 
 // Customer Routes
 Route::prefix('')->middleware(['auth'])->group(function () {
@@ -110,6 +126,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::get('/followups', [FollowupController::class, 'index'])->name('followups.index');
     Route::delete('/followups/{id}', [FollowupController::class, 'destroy'])->name('followups.destroy');
 });
+
 
 
 require __DIR__.'/auth.php';

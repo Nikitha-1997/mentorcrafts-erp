@@ -26,7 +26,11 @@ class Lead extends Model
 	'state', 
 	'district', 
 	'city',
-	'pincode'
+	'pincode',
+    'customer_id',
+    'status',
+    'requested_via_customer', // ✅ must be included
+    'created_by',
     ];
     public function services()
     {
@@ -38,7 +42,7 @@ class Lead extends Model
         return $this->hasMany(Followup::class);
         
     }
-    public function serviceCosts()
+public function serviceCosts()
 {
     return $this->hasMany(LeadServiceCost::class);
     
@@ -70,5 +74,10 @@ public static function generateLeadCode()
     // Build code like LD-202510-001, LD-202510-002, etc.
     return sprintf('%s-%s-%03d', $prefix, $monthYear, $count);
 }
+public function customer()
+{
+    return $this->belongsTo(Customer::class, 'customer_id');
+}
+
 
 }

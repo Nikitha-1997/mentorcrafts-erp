@@ -4,8 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Lead;
 use App\Models\Customer;
 use App\Models\Service;
+use App\Models\CustomerService;
+use App\Models\CustomerServiceCost;
+use App\Models\LeadService;
+use App\Models\LeadServiceCost;
+use Illuminate\Support\Facades\Auth;
 use Yajra\DataTables\Facades\DataTables;
 
 class CustomerController extends Controller
@@ -43,9 +49,11 @@ class CustomerController extends Controller
     public function edit(Customer $customer)
 {
     $services = Service::where('is_active', true)->get();
+     $customer->load('serviceCosts.service'); // eager load cost details
 
     // Only pass services and existing customer data
     return view('admin.customers.edit', compact('customer', 'services'));
+    
 }
 
 
@@ -57,65 +65,152 @@ class CustomerController extends Controller
     }
 
     // Update customer
-    public function update(Request $request, Customer $customer)
-    {
-        $request->validate([
-            'company_name'   => 'required|string|max:255',
-            'contact_person' => 'required|string|max:255',
-            'phone'          => 'nullable|string|max:20',
-            'email'          => 'nullable|email',
-            'address_line1'  => 'nullable|string|max:255',
-            'address_line2'  => 'nullable|string|max:255',
-            'country'        => 'nullable|string|max:255',
-            'state'          => 'nullable|string|max:255',
-            'district'       => 'nullable|string|max:255',
-            'city'           => 'nullable|string|max:255',
-            'pincode'        => 'nullable|string|max:10',
-            'services'       => 'nullable|array',
-        ]);
+public function update(Request $request, Customer $customer)
+{
+    $request->validate([
+        'company_name'   => 'required|string|max:255',
+        'contact_person' => 'required|string|max:255',
+        'phone'          => 'nullable|string|max:20',
+        'email'          => 'nullable|email',
+        'address_line1'  => 'nullable|string|max:255',
+        'address_line2'  => 'nullable|string|max:255',
+        'country'        => 'nullable|string|max:255',
+        'state'          => 'nullable|string|max:255',
+        'district'       => 'nullable|string|max:255',
+        'city'           => 'nullable|string|max:255',
+        'pincode'        => 'nullable|string|max:10',
+        'services'       => 'nullable|array',
+    ]);
 
-        // Update customer basic + address fields
-        $customer->update([
-            'company_name'   => $request->company_name,
-            'contact_person' => $request->contact_person,
-            'phone'          => $request->phone,
-            'email'          => $request->email,
-            'address_line1'  => $request->address_line1,
-            'address_line2'  => $request->address_line2,
-            'country'        => $request->country,
-            'state'          => $request->state,
-            'district'       => $request->district,
-            'city'           => $request->city,
-            'pincode'        => $request->pincode,
-        ]);
+    // ✅ Update basic info
+    $customer->update($request->only([
+        'company_name', 'contact_person', 'phone', 'email',
+        'address_line1', 'address_line2', 'country', 'state',
+        'district', 'city', 'pincode'
+    ]));
 
-        // Sync services with pivot data (service_code)
-        if ($request->filled('services')) {
-            $syncData = [];
+    // ✅ Sync services safely (without deleting existing)
+    if ($request->filled('services')) {
+        $existingServiceIds = $customer->services->pluck('id')->toArray();
+        $newServiceIds = $request->services;
 
-            foreach ($request->services as $serviceId) {
-                $existing = $customer->services()
-                    ->where('service_id', $serviceId)
-                    ->first();
+        // Preserve existing + add new
+        $syncData = [];
 
-                if ($existing) {
-                    // Keep existing code
-                    $syncData[$serviceId] = ['service_code' => $existing->pivot->service_code];
-                } else {
-                    // Generate new code
-                    $service = Service::find($serviceId);
-                    $code = \App\Models\CustomerService::generateServiceCode($service->name);
-                    $syncData[$serviceId] = ['service_code' => $code];
-                }
+        foreach ($newServiceIds as $serviceId) {
+            $existing = $customer->services()->where('service_id', $serviceId)->first();
+            if ($existing) {
+                $syncData[$serviceId] = ['service_code' => $existing->pivot->service_code];
+            } else {
+                $service = Service::find($serviceId);
+                $code = CustomerService::generateServiceCode($service->name);
+                $syncData[$serviceId] = ['service_code' => $code];
             }
-
-            $customer->services()->sync($syncData);
-        } else {
-            $customer->services()->detach();
         }
 
-        return redirect()->route('customers.index')->with('success', 'Customer updated successfully.');
+        $customer->services()->syncWithoutDetaching($syncData);
     }
+
+    // ✅ Update Customer Service Costs
+    if ($request->has('costs')) {
+        $submittedCostIds = [];
+
+        foreach ($request->costs as $serviceId => $costData) {
+            $ids = $costData['id'] ?? [];
+            $names = $costData['name'] ?? [];
+            $amounts = $costData['quoted_amount'] ?? [];
+            $types = $costData['billing_type'] ?? [];
+
+            foreach ($names as $i => $name) {
+                $costId = $ids[$i] ?? null;
+
+                if ($costId) {
+                    // Update existing
+                    $cost = $customer->serviceCosts()->where('id', $costId)->first();
+                    if ($cost) {
+                        $cost->update([
+                            'name' => $name,
+                            'quoted_amount' => $amounts[$i],
+                            'billing_type' => $types[$i],
+                        ]);
+                        $submittedCostIds[] = $costId;
+                    }
+                } else {
+                    // New cost entry
+                    $newCost = $customer->serviceCosts()->create([
+                        'service_id' => $serviceId,
+                        'name' => $name,
+                        'quoted_amount' => $amounts[$i],
+                        'billing_type' => $types[$i],
+                    ]);
+                    $submittedCostIds[] = $newCost->id;
+                }
+            }
+        }
+
+        // ✅ Delete removed costs (not in form)
+        $customer->serviceCosts()
+            ->whereNotIn('id', $submittedCostIds)
+            ->delete();
+    }
+
+    return redirect()
+        ->route('customers.index')
+        ->with('success', 'Customer updated successfully with service costs.');
+}
+
+public function requestNewService(Request $request, $customerId)
+{
+    $request->validate([
+        'services' => 'required|array|min:1',
+        'services.*' => 'exists:services,id',
+    ]);
+
+    $customer = Customer::findOrFail($customerId);
+
+    // ✅ Create new lead
+    $lead = Lead::create([
+        'lead_code' => Lead::generateLeadCode(),
+        'company_name' => $customer->company_name,
+        'contact_person' => $customer->contact_person,
+        'phone' => $customer->phone,
+        'email' => $customer->email,
+        'address_line1' => $customer->address_line1,
+        'address_line2' => $customer->address_line2,
+        'country' => $customer->country,
+        'state' => $customer->state,
+        'district' => $customer->district,
+        'city' => $customer->city,
+        'pincode' => $customer->pincode,
+        'customer_id' => $customer->id,
+        'status' => 'New',
+        'requested_via_customer' => true,
+        'created_by' => Auth::id(),
+    ]);
+
+    // ✅ Attach selected services to lead
+    foreach ($request->services as $serviceId) {
+        $lead->services()->attach($serviceId);
+
+        // (Optional) Copy base cost templates from service_costs
+        $baseCosts = \App\Models\ServiceCost::where('service_id', $serviceId)->get();
+        foreach ($baseCosts as $cost) {
+            LeadServiceCost::create([
+                'lead_id' => $lead->id,
+                'service_id' => $serviceId,
+                'name' => $cost->name,
+                'amount' => $cost->amount,
+                'billing_type' => $cost->billing_type,
+            ]);
+        }
+    }
+
+    // ✅ Redirect to lead show page
+    return redirect()->route('leads.index', $lead->id)
+        ->with('success', 'New service request created successfully as a Lead.');
+}
+
+
 
     // Soft delete customer
     public function destroy(Customer $customer)

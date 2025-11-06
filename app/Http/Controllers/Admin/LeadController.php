@@ -17,6 +17,7 @@ use Yajra\DataTables\Facades\DataTables;
 use Carbon\Carbon;
 use App\Models\ServiceCost;
 use App\Models\LeadServiceCost;
+use App\Models\CustomerServiceCost;
 use Illuminate\Support\Facades\Validator;
 
 
@@ -341,20 +342,69 @@ public function update(Request $request, Lead $lead)
     }
 public function convertToCustomer($id)
 {
-    $lead = Lead::with('services')->findOrFail($id);
+    $lead = Lead::with(['services', 'serviceCosts'])->findOrFail($id);
 
     // Prevent double conversion
     if (strtolower($lead->status) === 'converted') {
         return redirect()->route('customers.index')->with('info', 'Lead already converted.');
     }
 
-    // Create customer
+    // If lead already linked to a customer, update existing one
+    if ($lead->customer_id) {
+        $customer = Customer::find($lead->customer_id);
+
+        if ($customer) {
+            // ✅ Update basic customer details if needed
+            $customer->update([
+                'company_name'    => $lead->company_name,
+                'contact_person'  => $lead->contact_person,
+                'phone'           => $lead->phone,
+                'email'           => $lead->email,
+                'address_line1'   => $lead->address_line1,
+                'address_line2'   => $lead->address_line2,
+                'country'         => $lead->country,
+                'state'           => $lead->state,
+                'district'        => $lead->district,
+                'city'            => $lead->city,
+                'pincode'         => $lead->pincode,
+            ]);
+
+            // ✅ Attach new services only (avoid duplicates)
+            foreach ($lead->services as $service) {
+                if (!$customer->services->contains($service->id)) {
+                    $serviceCode = CustomerService::generateServiceCode($service->name);
+                    $customer->services()->attach($service->id, ['service_code' => $serviceCode]);
+                }
+            }
+
+            // ✅ Add or update service costs
+            foreach ($lead->serviceCosts as $cost) {
+                CustomerServiceCost::updateOrCreate(
+                    [
+                        'customer_id' => $customer->id,
+                        'service_id'  => $cost->service_id,
+                        'name'        => $cost->name,
+                    ],
+                    [
+                        'quoted_amount'   => $cost->amount,
+                        'billing_type'    => $cost->billing_type,
+                        'approved_amount' => null,
+                    ]
+                );
+            }
+
+            $lead->update(['status' => 'Converted']);
+            return redirect()->route('customers.index')->with('success', 'Existing customer updated with new services.');
+        }
+    }
+
+    // 🔹 Otherwise create new customer as before
     $customer = Customer::create([
-        'customer_code'  => Customer::generateCustomerCode(),
-        'company_name'   => $lead->company_name,
-        'contact_person' => $lead->contact_person,
-        'phone'          => $lead->phone,
-        'email'          => $lead->email,
+        'customer_code'   => Customer::generateCustomerCode(),
+        'company_name'    => $lead->company_name,
+        'contact_person'  => $lead->contact_person,
+        'phone'           => $lead->phone,
+        'email'           => $lead->email,
         'address_line1'   => $lead->address_line1,
         'address_line2'   => $lead->address_line2,
         'country'         => $lead->country,
@@ -362,22 +412,39 @@ public function convertToCustomer($id)
         'district'        => $lead->district,
         'city'            => $lead->city,
         'pincode'         => $lead->pincode,
-        'lead_id'        => $lead->id,
+        'lead_id'         => $lead->id,
     ]);
 
-    // Copy services and generate service codes
+    // Attach services with service codes
     foreach ($lead->services as $service) {
         $serviceCode = CustomerService::generateServiceCode($service->name);
-
         $customer->services()->attach($service->id, ['service_code' => $serviceCode]);
     }
 
-    // Update lead status
-    $lead->update(['status' => 'Converted']);
+    // Copy service costs
+    foreach ($lead->serviceCosts as $cost) {
+        CustomerServiceCost::create([
+            'customer_id'     => $customer->id,
+            'service_id'      => $cost->service_id,
+            'name'            => $cost->name,
+            'quoted_amount'   => $cost->amount,
+            'approved_amount' => null,
+            'billing_type'    => $cost->billing_type,
+        ]);
+    }
+
+    // Update lead
+    $lead->update([
+        'status' => 'Converted',
+        'customer_id' => $customer->id, // link back
+    ]);
 
     return redirect()->route('customers.index')
-        ->with('success', "Lead converted to Customer successfully: {$customer->company_name}");
+        ->with('success', "Lead converted to new customer successfully: {$customer->company_name}");
 }
+
+
+
 /**
  * Return service costs (ServiceCost) for given service IDs (AJAX).
  * Response grouped by service_id, with service name attached.

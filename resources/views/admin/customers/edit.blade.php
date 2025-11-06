@@ -14,6 +14,7 @@
                 @method('PUT')
 
                 <div class="row">
+                    {{-- Basic Info --}}
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Company Name</label>
                         <input type="text" name="company_name" class="form-control" 
@@ -38,7 +39,7 @@
                                value="{{ old('email', $customer->email) }}">
                     </div>
 
-                    <!-- Address Section -->
+                    {{-- Address --}}
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Address Line 1</label>
                         <input type="text" name="address_line1" class="form-control" 
@@ -84,9 +85,10 @@
                                value="{{ old('pincode', $customer->pincode) }}">
                     </div>
 
-                    <div class="col-md-12 mb-3">
+                    {{-- Services --}}
+                   <!-- <div class="col-md-12 mb-3">
                         <label class="form-label">Services</label>
-                        <select name="services[]" class="form-select" multiple>
+                        <select name="services[]" id="services" class="form-select" multiple>
                             @foreach($services as $service)
                                 <option value="{{ $service->id }}"
                                     {{ in_array($service->id, old('services', $customer->services->pluck('id')->toArray())) ? 'selected' : '' }}>
@@ -94,22 +96,94 @@
                                 </option>
                             @endforeach
                         </select>
-                    </div>
+                    </div>-->
                 </div>
 
-                <div class="d-flex justify-content-end mt-3">
+                {{-- ✅ Service Costs Section --}}
+                <h5>Services Availed</h5>
+                <div id="service-costs-container">
+                    @foreach($customer->services as $service)
+                        <div class="card mt-3 service-cost-card" data-service-id="{{ $service->id }}">
+                            <div class="card-header bg-light fw-semibold">
+                                {{ $service->name }} - Cost Details
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-bordered mb-0 service-cost-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Cost Name</th>
+                                            <th>Amount</th>
+                                            <th>Billing Type</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                     @foreach($customer->serviceCosts->where('service_id', $service->id) as $cost)
+<tr>
+    <td>
+        <input type="hidden" name="costs[{{ $service->id }}][id][]" value="{{ $cost->id }}">
+        <input type="text" name="costs[{{ $service->id }}][name][]" value="{{ $cost->name }}" class="form-control" required>
+    </td>
+    <td>
+        <input type="number" name="costs[{{ $service->id }}][quoted_amount][]" value="{{ $cost->quoted_amount }}" step="0.01" class="form-control" required>
+    </td>
+    <td>
+        <select name="costs[{{ $service->id }}][billing_type][]" class="form-select">
+            @foreach(['one_time','monthly','yearly','per_sqft','per_head'] as $type)
+                <option value="{{ $type }}" {{ $cost->billing_type === $type ? 'selected' : '' }}>
+                    {{ ucfirst(str_replace('_',' ', $type)) }}
+                </option>
+            @endforeach
+        </select>
+    </td>
+    <td><button type="button" class="btn btn-danger btn-sm remove-row">×</button></td>
+</tr>
+@endforeach
+
+                                    </tbody>
+                                </table>
+                                <button type="button" class="btn btn-outline-primary btn-sm mt-2 add-row">+ Add Row</button>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                
+
+                <div class="d-flex justify-content-end mt-4">
                     <button type="submit" class="btn btn-success">Update Customer</button>
                 </div>
             </form>
+            <h5 class="mt-4">Request New Service</h5>
+<form action="{{ route('customers.request-service', $customer->id) }}" method="POST">
+    @csrf
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <label class="form-label">Select New Services</label>
+            <select name="services[]" class="form-select" multiple required>
+                @foreach($services as $service)
+                    @if(!$customer->services->contains($service->id))
+                        <option value="{{ $service->id }}">{{ $service->name }}</option>
+                    @endif
+                @endforeach
+            </select>
+            <small class="text-muted">Hold Ctrl or Cmd to select multiple</small>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary">
+                Create Lead for New Services
+            </button>
+        </div>
+    </div>
+</form>
         </div>
     </div>
 </div>
 
-{{-- 🌎 Dynamic Address Script using public API --}}
+{{-- 🌎 Address JS --}}
 <script>
 const selectedCountry = "{{ $customer->country ?? '' }}";
-    const selectedState = "{{ $customer->state ?? '' }}";
-    const selectedDistrict = "{{ $customer->district ?? '' }}";
+const selectedState = "{{ $customer->state ?? '' }}";
+const selectedDistrict = "{{ $customer->district ?? '' }}";
 
 async function loadCountries() {
     const res = await fetch("https://countriesnow.space/api/v0.1/countries/positions");
@@ -150,24 +224,6 @@ async function loadStates(country) {
     if (selectedState) loadDistricts(selectedState);
 }
 
-/*async function loadDistricts(state) {
-    const res = await fetch("https://api.countrystatecity.in/v1/countries/IN/states", {
-        headers: {
-            "X-CSCAPI-KEY": "YOUR_API_KEY" // optional; only if using that API
-        }
-    });
-    const districts = []; // Replace with actual district API if available
-
-    const districtSelect = document.getElementById('district');
-    districtSelect.innerHTML = '<option value="">Select District</option>';
-    districts.forEach(d => {
-        const option = document.createElement('option');
-        option.value = d.name;
-        option.textContent = d.name;
-        if (d.name === selectedDistrict) option.selected = true;
-        districtSelect.appendChild(option);
-    });
-}*/
 async function loadDistricts(state) {
     const country = document.getElementById('country').value;
     const districtSelect = document.getElementById('district');
@@ -192,15 +248,37 @@ async function loadDistricts(state) {
     });
 }
 
-
-document.getElementById('country').addEventListener('change', e => {
-    loadStates(e.target.value);
-});
-
-document.getElementById('state').addEventListener('change', e => {
-    loadDistricts(e.target.value);
-});
-
+document.getElementById('country').addEventListener('change', e => loadStates(e.target.value));
+document.getElementById('state').addEventListener('change', e => loadDistricts(e.target.value));
 loadCountries();
+
+// 💰 Add/remove cost rows dynamically
+ document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('add-row')) {
+            const table = e.target.closest('.service-cost-card').querySelector('tbody');
+            const serviceId = e.target.closest('.service-cost-card').dataset.serviceId;
+            const row = `
+                <tr>
+                    <td><input type="text" name="costs[${serviceId}][name][]" class="form-control" required></td>
+                    <td><input type="number" step="0.01" name="costs[${serviceId}][quoted_amount][]" class="form-control" required></td>
+                    <td>
+                        <select name="costs[${serviceId}][billing_type][]" class="form-select">
+                            <option value="one_time">One Time</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                            <option value="per_sqft">Per Sqft</option>
+                            <option value="per_head">Per Head</option>
+                        </select>
+                    </td>
+                    <td><button type="button" class="btn btn-danger btn-sm remove-row">×</button></td>
+                </tr>`;
+            table.insertAdjacentHTML('beforeend', row);
+        }
+
+        if (e.target.classList.contains('remove-row')) {
+            e.target.closest('tr').remove();
+        }
+    });
+
 </script>
 @endsection
