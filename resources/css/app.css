@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+#scrollbar {
+    height: calc(100vh - 60px); /* adjust 60px if header height differs */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #888 transparent;
+}
+
+#scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+#scrollbar::-webkit-scrollbar-thumb {
+    background-color: #aaa;
+    border-radius: 3px;
+}
+
